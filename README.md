@@ -248,6 +248,16 @@ pip install aiohttp numpy matplotlib seaborn openpyxl
 
 ## Known Limitations
 
+### ⚠️ Important Note: Scope of Test Results
+
+**These tests only represent results from inserting needles within `a|` repetitive sequences.** In actual usage, model recall and attention are significantly influenced by the input text characteristics. Therefore, the accuracy measured in these tests **has comparative value only, not absolute value**.
+
+**Do not directly apply these test results to claim that a model's recall and attention at a certain context length are limited to what these results show.** Different input content, text structures, and linguistic features can all significantly affect actual model performance.
+
+**These tests are suitable for:**
+- **Horizontal comparison**: Comparing different models under identical testing conditions
+- **Longitudinal comparison**: Evaluating the same model's recall performance across different context window sizes
+
 ### DeepSeek Model Testing Notes
 
 For DeepSeek models, since the **DeepSeek V3.1** version, a special attention mechanism has been introduced internally. This causes the test results to be inaccurate when using the simple `a|` pattern — specifically, it shows **abnormally high accuracy across the entire context range, which is not normal behavior**.
