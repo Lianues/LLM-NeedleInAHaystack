@@ -6,8 +6,8 @@
 
 下面是相关的测试结果：
 
-### 全窗口视图
-![全窗口测试结果](test_results/all.png)
+### 全上下文窗口视图
+![全上下文窗口测试结果](test_results/all.png)
 
 ### 对数坐标视图（以10为底）
 ![对数坐标测试结果](test_results/log10.png)
