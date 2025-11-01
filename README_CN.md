@@ -2,6 +2,16 @@
 
 [English](README.md) | 简体中文
 
+## 测试结果
+
+下面是相关的测试结果：
+
+### 全窗口视图
+![全窗口测试结果](test_results/all.png)
+
+### 对数坐标视图（以10为底）
+![对数坐标测试结果](test_results/log10.png)
+
 ## 项目简介
 
 本项目通过一种类似于"大海捞针"的方法，对现有主流大语言模型进行召回率的测试。该测试方法在某种程度上可能与模型注意力机制的性能成正相关。
@@ -12,6 +22,8 @@
 - **gemini-2.5-pro**
 - **gemini-2.5-flash-preview-09-2025**
 - **claude-sonnet-4-5-thinking**
+- **DeepSeek_V3_0324**
+- **gemini-deepthink**
 
 除此之外，还对近期比较火的隐藏模型进行了测试：
 - **lithiumflow**
@@ -177,10 +189,6 @@ python evaluate_test.py
 ```
 
 此命令会评估 [`test.json`](test.json) 相对于 [`答案.json`](答案.json) 的准确率。
-
-## 测试结果
-
-下面是相关的测试结果：
 
 ### 数据库存储
 

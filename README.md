@@ -2,6 +2,16 @@
 
 English | [简体中文](README_CN.md)
 
+## Test Results
+
+Below are the relevant test results:
+
+### Full Window View
+![Full Window Test Results](test_results/all.png)
+
+### Logarithmic Scale View (Base 10)
+![Logarithmic Scale Test Results](test_results/log10.png)
+
 ## Project Overview
 
 This project tests the recall capabilities of mainstream large language models using a "needle in a haystack" methodology. This testing approach may correlate with the performance of model attention mechanisms to some extent.
@@ -12,6 +22,8 @@ Primary models tested:
 - **gemini-2.5-pro**
 - **gemini-2.5-flash-preview-09-2025**
 - **claude-sonnet-4-5-thinking**
+- **DeepSeek_V3_0324**
+- **gemini-deepthink**
 
 Additionally, we tested recently popular hidden models:
 - **lithiumflow**
@@ -177,10 +189,6 @@ python evaluate_test.py
 ```
 
 This command evaluates the accuracy of [`test.json`](test.json) relative to [`答案.json`](答案.json).
-
-## Test Results
-
-Below are the relevant test results:
 
 ### Database Storage
 
