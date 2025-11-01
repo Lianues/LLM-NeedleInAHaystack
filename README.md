@@ -238,12 +238,33 @@ pip install aiohttp numpy matplotlib seaborn openpyxl
 - `seaborn`: Heatmap visualization
 - `openpyxl`: Excel file operations
 
+## Known Limitations
+
+### DeepSeek Model Testing Notes
+
+For DeepSeek models, since the **DeepSeek V3.1** version, a special attention mechanism has been introduced internally. This causes the test results to be inaccurate when using the simple `a|` pattern — specifically, it shows **abnormally high accuracy across the entire context range, which is not normal behavior**.
+
+When we changed the insertion pattern and stopped using the simple `a|` repetition, DeepSeek models showed drastically different results. This suggests that the model may have special optimizations for specific repetitive patterns.
+
+**Future Plans**: We will create a revised version of the test set to more accurately evaluate models with special attention mechanisms, including DeepSeek.
+
+### GPT-5 Model Testing Notes
+
+Additionally, we tested the **GPT-5** model. However, GPT-5 uses an internal **model routing mechanism** that causes severe instability issues:
+
+- In the same context (50k tokens) tests, accuracy distribution is extremely unstable, **ranging wildly from 5% to 100%**
+- 100% accuracy likely indicates routing to the best model in the ensemble, but this cannot be reliably reproduced
+- We attempted various methods to stabilize routing results, including:
+  - Modifying prompt content
+  - Adjusting thinking intensity settings (even when set to `high`)
+  - Various other optimization strategies
+
+**Test Conclusion**: Due to the inability to obtain stable and reproducible test results, GPT-5 model test sets will not be publicly released at this time. We will publish the test set once better testing methodologies are developed.
+
 ## Citation
 
 If this project helps your research, citations are welcome!
 
 ---
-
-**Project Status**: 🟢 Actively Maintained
 
 **Last Updated**: 2025.11.01
