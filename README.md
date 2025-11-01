@@ -6,7 +6,7 @@ English | [简体中文](README_CN.md)
 
 Below are the relevant test results:
 
-### Full Window View
+### Full Context Window View
 ![Full Context Window Test Results](test_results/all.png)
 
 ### Logarithmic Scale View (Base 10)
