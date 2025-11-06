@@ -11,12 +11,6 @@ Below are the relevant test results:
 ### Gemini Logarithmic Scale View (Base 10)
 ![Logarithmic Scale Test Results](test_results/glog10.png)
 
-### Full Context Window View
-![Full Context Window Test Results](test_results/all.png)
-
-### Logarithmic Scale View (Base 10)
-![Logarithmic Scale Test Results](test_results/log10.png)
-
 ## Project Overview
 
 This project tests the recall capabilities of mainstream large language models using a "needle in a haystack" methodology. This testing approach may correlate with the performance of model attention mechanisms to some extent.
