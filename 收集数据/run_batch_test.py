@@ -11,12 +11,12 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 配置参数
-API_URL = "https://llm.chutes.ai/v1/chat/completions"
-MODEL_ID = "DeepSeek-R1-0528-chutes"      # 模型ID（用于数据库文件名）
-API_MODEL = "deepseek-ai/DeepSeek-R1-0528"     # 发送给API的模型名称
+API_URL = "http://127.0.0.1:7860/v1/chat/completions"
+MODEL_ID = "gemini-3-pro-preview-11-2025"      # 模型ID（用于数据库文件名）
+API_MODEL = "gemini-3-pro-preview-11-2025"     # 发送给API的模型名称
 
 # 默认生成参数
-DEFAULT_TARGET_LENGTH = 30000
+DEFAULT_TARGET_LENGTH = 32000
 DEFAULT_NUM_INSERTIONS = 40
 DEFAULT_BASE_PATTERN = "a|"
 DEFAULT_REQUEST_DELAY = 0  # 默认请求延迟（秒）
@@ -25,7 +25,7 @@ DEFAULT_REQUEST_DELAY = 0  # 默认请求延迟（秒）
 HEADERS = {
     'accept': 'application/json',
     'accept-language': 'zh-CN',
-    'authorization': 'Bearer cpk_77ab805884c14aa0bb67ef9d7499984b.768df810bf3a54c19847ca3d1c51d8be.gb3qfhYIIv1e5vDGvdEoAUcGv39aHEb9',
+    'authorization': 'Bearer 123456',
     'content-type': 'application/json',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) CherryStudio/1.5.11 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36',
 }
