@@ -9,10 +9,12 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 配置参数
 BASE_PATTERN = "a|"
 DIGIT_LENGTH = 4       # 4位数
+DEFAULT_NEEDLE_RANGE = "0.5-1"  # 默认插针返回范围（0-1表示全部，0.5-1表示后半部分等）
 
 # 从命令行参数获取配置
-# 参数1: 上下文长度（默认20000）
+# 参数1: 上下文长度（默认50000）
 # 参数2: 插入数量（默认40）
+# 参数3: 插针返回范围（默认0-1）
 
 if len(sys.argv) > 1:
     try:
@@ -22,10 +24,11 @@ if len(sys.argv) > 1:
             sys.exit(1)
     except ValueError:
         print("错误: 上下文数必须是整数")
-        print("使用方法: python generate_text.py [上下文数] [插入数量]")
+        print("使用方法: python generate_text.py [上下文数] [插入数量] [插针范围]")
         print("示例:")
-        print("  python generate_text.py 20000      # 20000字符，插入40个数")
-        print("  python generate_text.py 30000 50   # 30000字符，插入50个数")
+        print("  python generate_text.py 20000          # 20000字符，插入40个数")
+        print("  python generate_text.py 30000 50       # 30000字符，插入50个数")
+        print("  python generate_text.py 30000 50 0.5-1 # 30000字符，插入50个数，返回后半部分")
         sys.exit(1)
 else:
     TARGET_LENGTH = 50000  # 默认长度20k字符
@@ -42,26 +45,51 @@ if len(sys.argv) > 2:
 else:
     NUM_INSERTIONS = 40  # 默认插入40个数字
 
+if len(sys.argv) > 3:
+    NEEDLE_RANGE = sys.argv[3]
+    # 验证格式
+    try:
+        range_parts = NEEDLE_RANGE.split('-')
+        range_start = float(range_parts[0])
+        range_end = float(range_parts[1])
+        if not (0 <= range_start <= range_end <= 1):
+            raise ValueError
+    except (ValueError, IndexError):
+        print(f"错误: 插针范围格式错误，应为 'start-end' 格式，如 '0-1' 或 '0.5-1'")
+        sys.exit(1)
+else:
+    NEEDLE_RANGE = DEFAULT_NEEDLE_RANGE
+
 # 1. 构造基础字符串
 base_string = BASE_PATTERN * (TARGET_LENGTH // len(BASE_PATTERN) + 1)
 base_string = base_string[:TARGET_LENGTH]
 
-# 2. 计算插入位置（均匀分配 + 小范围随机）
-interval = len(base_string) // (NUM_INSERTIONS + 1)  # 计算基础间隔
-random_range = interval // 4  # 随机范围为间隔的1/4
+# 2. 解析插针范围，计算实际插入区域
+range_parts = NEEDLE_RANGE.split('-')
+range_start = float(range_parts[0])
+range_end = float(range_parts[1])
+
+# 计算插入区域的起始和结束位置
+insert_start_pos = int(len(base_string) * range_start)
+insert_end_pos = int(len(base_string) * range_end)
+insert_length = insert_end_pos - insert_start_pos
+
+# 3. 在指定范围内计算插入位置（均匀分配 + 小范围随机）
+interval = insert_length // (NUM_INSERTIONS + 1)  # 计算基础间隔
+random_range = interval // 20  # 随机范围为间隔的5%
 
 positions = []
 for i in range(1, NUM_INSERTIONS + 1):
-    base_pos = i * interval
+    base_pos = insert_start_pos + i * interval
     # 添加小范围随机偏移
-    random_offset = random.randint(-random_range, random_range)
-    actual_pos = max(0, min(len(base_string), base_pos + random_offset))
+    random_offset = random.randint(-random_range, random_range) if random_range > 0 else 0
+    actual_pos = max(insert_start_pos, min(insert_end_pos, base_pos + random_offset))
     positions.append(actual_pos)
 
 # 排序位置以便从后向前插入（避免位置偏移）
 positions.sort(reverse=True)
 
-# 3. 生成随机4位数并插入
+# 4. 生成随机4位数并插入
 # 先生成所有数字并记录（按正序）
 numbers_list = []
 result_string = list(base_string)
@@ -81,26 +109,25 @@ final_string = ''.join(result_string)
 numbers_list.sort(key=lambda x: x[0])
 inserted_numbers = {str(num): val for num, val in numbers_list}
 
-# 4. 输出到md文件（包含提示信息）
-prompt_text = """
-
----
-Please give me an answer worth $200, think very carefully, and give me the best possible response.Extract all pure four-digit numbers (i.e., 1000–9999) interspersed within the text above, and output the numbers and their order of appearance in a JSON format following the example below:
+# 5. 输出到md文件（包含提示信息）
+prompt_text = """Please give me an answer worth $200, think very carefully, and give me the best possible response.Extract all pure four-digit numbers (i.e., 1000–9999) interspersed within the text below, and output the numbers and their order of appearance in a JSON format following the example below:
 {
 "1": 123,
 "2": 234,
 "3": 345
-}"""
+}
+---
+"""
 
 # 构造输出文件的完整路径（相对于脚本目录）
 output_md_path = os.path.join(SCRIPT_DIR, 'output.md')
 numbers_json_path = os.path.join(SCRIPT_DIR, 'numbers.json')
 
 with open(output_md_path, 'w', encoding='utf-8') as f:
-    f.write(final_string)
     f.write(prompt_text)
+    f.write(final_string)
 
-# 5. 输出json文件
+# 6. 输出json文件
 with open(numbers_json_path, 'w', encoding='utf-8') as f:
     json.dump(inserted_numbers, f, indent=2, ensure_ascii=False)
 
@@ -109,5 +136,6 @@ print(f"目标长度: {TARGET_LENGTH} 字符")
 print(f"基础字符串长度: {len(base_string)} 字符")
 print(f"最终字符串长度: {len(final_string)} 字符")
 print(f"字节数: {len(final_string.encode('utf-8'))} bytes")
+print(f"插针范围: {NEEDLE_RANGE} (文本位置 {insert_start_pos}-{insert_end_pos})")
 print(f"插入了 {NUM_INSERTIONS} 个4位数字")
 print(f"输出文件: {output_md_path} 和 {numbers_json_path}")

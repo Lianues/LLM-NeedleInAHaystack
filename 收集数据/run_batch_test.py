@@ -20,6 +20,7 @@ DEFAULT_TARGET_LENGTH = 32000
 DEFAULT_NUM_INSERTIONS = 40
 DEFAULT_BASE_PATTERN = "a|"
 DEFAULT_REQUEST_DELAY = 0  # 默认请求延迟（秒）
+DEFAULT_NEEDLE_RANGE = "0.5-1"  # 默认插针返回范围（0-1表示全部，0.5-1表示后半部分等）
 
 # HTTP 请求头
 HEADERS = {
@@ -207,22 +208,40 @@ def get_byte_count(text):
     """获取文本的字节数（UTF-8编码）"""
     return len(text.encode('utf-8'))
 
-def generate_test_case(target_length, num_insertions, base_pattern=DEFAULT_BASE_PATTERN):
+def generate_test_case(target_length, num_insertions, base_pattern=DEFAULT_BASE_PATTERN, needle_range=DEFAULT_NEEDLE_RANGE):
     """
     生成一次测试用例（不落盘）
 
+    参数:
+        target_length: 目标文本长度
+        num_insertions: 插入数量
+        base_pattern: 基础填充模式
+        needle_range: 插针插入范围（格式："start-end"，如"0-1"表示全文，"0.5-1"表示后半部分）
+
     返回: (prompt_content, standard_json_str, byte_count)
     """
+    import random
     base_string = (base_pattern * (target_length // len(base_pattern) + 1))[:target_length]
 
-    interval = len(base_string) // (num_insertions + 1)
-    random_range = interval // 4
-    import random
+    # 解析插针范围，计算实际插入区域
+    range_parts = needle_range.split('-')
+    range_start = float(range_parts[0])
+    range_end = float(range_parts[1])
+    
+    # 计算插入区域的起始和结束位置
+    insert_start_pos = int(len(base_string) * range_start)
+    insert_end_pos = int(len(base_string) * range_end)
+    insert_length = insert_end_pos - insert_start_pos
+    
+    # 在指定范围内计算插入位置（均匀分配 + 小范围随机）
+    interval = insert_length // (num_insertions + 1)
+    random_range = interval // 20
+    
     positions = []
     for i in range(1, num_insertions + 1):
-        base_pos = i * interval
+        base_pos = insert_start_pos + i * interval
         random_offset = random.randint(-random_range, random_range) if random_range > 0 else 0
-        actual_pos = max(0, min(len(base_string), base_pos + random_offset))
+        actual_pos = max(insert_start_pos, min(insert_end_pos, base_pos + random_offset))
         positions.append(actual_pos)
     positions.sort(reverse=True)
 
@@ -253,7 +272,7 @@ def generate_test_case(target_length, num_insertions, base_pattern=DEFAULT_BASE_
     return prompt_content, standard_json_str, byte_count
 
 async def make_api_request(session, request_id, semaphore, db_manager,
-                          target_length, num_insertions, base_pattern, stats):
+                          target_length, num_insertions, base_pattern, needle_range, stats):
     """
     发送单个API请求（每次生成独立的测试用例）
     """
@@ -261,7 +280,7 @@ async def make_api_request(session, request_id, semaphore, db_manager,
         print(f"→ 请求 #{request_id}: 开始发送...")
 
         prompt_content, standard_answers_json, byte_count = generate_test_case(
-            target_length, num_insertions, base_pattern
+            target_length, num_insertions, base_pattern, needle_range
         )
 
         db_manager.create_table_if_not_exists(byte_count)
@@ -374,13 +393,14 @@ async def main():
                 raise ValueError
         except ValueError:
             print("错误: 运行次数必须是大于0的整数")
-            print("使用方法: python run_batch_test.py [运行次数] [并发数] [请求延迟] [上下文长度] [插入数量] [基础模式]")
+            print("使用方法: python run_batch_test.py [运行次数] [并发数] [请求延迟] [上下文长度] [插入数量] [基础模式] [插针范围]")
             print("示例:")
-            print("  python run_batch_test.py                    # 使用默认值：10次，1并发，0延迟")
-            print("  python run_batch_test.py 20                 # 20次，1并发，0延迟")
-            print("  python run_batch_test.py 20 5               # 20次，5并发，0延迟")
-            print("  python run_batch_test.py 20 5 1             # 20次，5并发，1秒延迟")
-            print("  python run_batch_test.py 20 5 1 30000 50    # 20次，5并发，1秒延迟，30000字节，50个插入")
+            print("  python run_batch_test.py                         # 使用默认值：10次，1并发，0延迟")
+            print("  python run_batch_test.py 20                      # 20次，1并发，0延迟")
+            print("  python run_batch_test.py 20 5                    # 20次，5并发，0延迟")
+            print("  python run_batch_test.py 20 5 1                  # 20次，5并发，1秒延迟")
+            print("  python run_batch_test.py 20 5 1 30000 50         # 20次，5并发，1秒延迟，30000字节，50个插入")
+            print("  python run_batch_test.py 20 5 1 30000 50 a| 0.5-1  # 后半部分插针")
             sys.exit(1)
 
     if len(sys.argv) > 2:
@@ -428,6 +448,20 @@ async def main():
         if not base_pattern:
             base_pattern = DEFAULT_BASE_PATTERN
 
+    needle_range = DEFAULT_NEEDLE_RANGE
+    if len(sys.argv) > 7:
+        needle_range = sys.argv[7]
+        # 验证格式
+        try:
+            range_parts = needle_range.split('-')
+            range_start = float(range_parts[0])
+            range_end = float(range_parts[1])
+            if not (0 <= range_start <= range_end <= 1):
+                raise ValueError
+        except (ValueError, IndexError):
+            print(f"错误: 插针范围格式错误，应为 'start-end' 格式，如 '0-1' 或 '0.5-1'")
+            sys.exit(1)
+
     print("=" * 70)
     print("批量API数据收集脚本（SQLite版本 - 动态并发）")
     print("=" * 70)
@@ -440,6 +474,7 @@ async def main():
     print(f"上下文长度: {target_length}")
     print(f"插入数量: {num_insertions}")
     print(f"基础模式: {base_pattern}")
+    print(f"插针返回范围: {needle_range}")
     print("=" * 70)
 
     db_manager = DatabaseManager(MODEL_ID, SCRIPT_DIR)
@@ -448,7 +483,7 @@ async def main():
     db_manager.create_stats_table()
 
     sample_prompt, sample_standard_json, sample_byte_count = generate_test_case(
-        target_length, num_insertions, base_pattern
+        target_length, num_insertions, base_pattern, needle_range
     )
     table_name = db_manager.create_table_if_not_exists(sample_byte_count)
 
@@ -469,7 +504,7 @@ async def main():
             task = asyncio.create_task(
                 make_api_request(
                     session, i, semaphore, db_manager,
-                    target_length, num_insertions, base_pattern, stats
+                    target_length, num_insertions, base_pattern, needle_range, stats
                 )
             )
             tasks.append(task)
