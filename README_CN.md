@@ -7,10 +7,10 @@
 下面是相关的测试结果：
 
 ### Gemini系列全家桶全上下文窗口视图
-![全上下文窗口测试结果](test_results/gall.png)
+![全上下文窗口测试结果](test_results/Gall.png)
 
 ### Gemini系列全家桶对数坐标视图（以10为底）
-![对数坐标测试结果](test_results/glog10.png)
+![对数坐标测试结果](test_results/Glog10.png)
 
 ## 项目简介
 
