@@ -5,6 +5,11 @@ English | [简体中文](README_CN.md)
 ## Test Results
 
 Below are the relevant test results:
+### Gemini Full Context Window View
+![Full Context Window Test Results](test_results/gall.png)
+
+### Gemini Logarithmic Scale View (Base 10)
+![Logarithmic Scale Test Results](test_results/glog10.png)
 
 ### Full Context Window View
 ![Full Context Window Test Results](test_results/all.png)
