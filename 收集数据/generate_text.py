@@ -75,16 +75,31 @@ insert_end_pos = int(len(base_string) * range_end)
 insert_length = insert_end_pos - insert_start_pos
 
 # 3. 在指定范围内计算插入位置（均匀分配 + 小范围随机）
-interval = insert_length // (NUM_INSERTIONS + 1)  # 计算基础间隔
-random_range = interval // 20  # 随机范围为间隔的5%
-
-positions = []
-for i in range(1, NUM_INSERTIONS + 1):
-    base_pos = insert_start_pos + i * interval
-    # 添加小范围随机偏移
-    random_offset = random.randint(-random_range, random_range) if random_range > 0 else 0
-    actual_pos = max(insert_start_pos, min(insert_end_pos, base_pos + random_offset))
-    positions.append(actual_pos)
+# 头尾都插针，所以间隔数 = 针数量 - 1
+if NUM_INSERTIONS == 1:
+    # 特殊情况：只有一个针，放在中间
+    positions = [insert_start_pos + insert_length // 2]
+else:
+    interval = insert_length // (NUM_INSERTIONS - 1)  # 间隔数等于针数量-1
+    random_range = interval // 20  # 随机范围为间隔的5%
+    
+    positions = []
+    for i in range(NUM_INSERTIONS):
+        base_pos = insert_start_pos + i * interval
+        
+        # 添加小范围随机偏移，头尾特殊处理
+        if i == 0:
+            # 第一个针：只能向右偏移
+            random_offset = random.randint(0, random_range) if random_range > 0 else 0
+        elif i == NUM_INSERTIONS - 1:
+            # 最后一个针：只能向左偏移
+            random_offset = random.randint(-random_range, 0) if random_range > 0 else 0
+        else:
+            # 中间的针：可以双向偏移
+            random_offset = random.randint(-random_range, random_range) if random_range > 0 else 0
+        
+        actual_pos = max(insert_start_pos, min(insert_end_pos, base_pos + random_offset))
+        positions.append(actual_pos)
 
 # 排序位置以便从后向前插入（避免位置偏移）
 positions.sort(reverse=True)
