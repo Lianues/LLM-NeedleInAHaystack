@@ -11,22 +11,22 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 配置参数
-API_URL = "http://127.0.0.1:7860/v1/chat/completions"
-MODEL_ID = "gemini-3-pro-preview-11-2025"      # 模型ID（用于数据库文件名）
-API_MODEL = "gemini-3-pro-preview-11-2025"     # 发送给API的模型名称
+API_URL = "http://127.0.0.1"
+MODEL_ID = "gemini-2.5-pro"      # 模型ID（用于数据库文件名）
+API_MODEL = "gemini-2.5-pro"     # 发送给API的模型名称
 
 # 默认生成参数
-DEFAULT_TARGET_LENGTH = 32000
+DEFAULT_TARGET_LENGTH = 100000
 DEFAULT_NUM_INSERTIONS = 40
 DEFAULT_BASE_PATTERN = "a|"
 DEFAULT_REQUEST_DELAY = 0  # 默认请求延迟（秒）
-DEFAULT_NEEDLE_RANGE = "0.5-1"  # 默认插针返回范围（0-1表示全部，0.5-1表示后半部分等）
+DEFAULT_NEEDLE_RANGE = "0-0.1:1,0.9-1:39"  # 默认插针返回范围（0-1表示全部，0.5-1表示后半部分，支持多区间：0-0.25,0.75-1）
 
 # HTTP 请求头
 HEADERS = {
     'accept': 'application/json',
     'accept-language': 'zh-CN',
-    'authorization': 'Bearer 123456',
+    'authorization': 'Bearer sk-PYBojZzEeRnS82077cIAgv1XMT31Uz7oq7a_QDpuZMKeqZXQ',
     'content-type': 'application/json',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) CherryStudio/1.5.11 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36',
 }
@@ -214,52 +214,120 @@ def generate_test_case(target_length, num_insertions, base_pattern=DEFAULT_BASE_
 
     参数:
         target_length: 目标文本长度
-        num_insertions: 插入数量
+        num_insertions: 插入数量（当区间指定了数量时会被覆盖）
         base_pattern: 基础填充模式
-        needle_range: 插针插入范围（格式："start-end"，如"0-1"表示全文，"0.5-1"表示后半部分）
+        needle_range: 插针插入范围
+                     格式："start-end" 或 "start1-end1,start2-end2,..."
+                     支持指定数量："start-end:count" 如 "0-0.1:1,0.9-1:20"
+                     如"0-1"表示全文，"0.5-1"表示后半部分，"0-0.25,0.75-1"表示前后两段
 
-    返回: (prompt_content, standard_json_str, byte_count)
+    返回: (prompt_content, standard_json_str, byte_count, actual_num_insertions)
     """
     import random
     base_string = (base_pattern * (target_length // len(base_pattern) + 1))[:target_length]
 
-    # 解析插针范围，计算实际插入区域
-    range_parts = needle_range.split('-')
-    range_start = float(range_parts[0])
-    range_end = float(range_parts[1])
+    # 解析多区间（支持逗号分隔的多个区间，支持 :count 指定数量）
+    ranges = []
+    has_count_specified = False
     
-    # 计算插入区域的起始和结束位置
-    insert_start_pos = int(len(base_string) * range_start)
-    insert_end_pos = int(len(base_string) * range_end)
-    insert_length = insert_end_pos - insert_start_pos
-    
-    # 在指定范围内计算插入位置（均匀分配 + 小范围随机）
-    # 头尾都插针，所以间隔数 = 针数量 - 1
-    if num_insertions == 1:
-        # 特殊情况：只有一个针，放在中间
-        positions = [insert_start_pos + insert_length // 2]
-    else:
-        interval = insert_length // (num_insertions - 1)  # 间隔数等于针数量-1
-        random_range = interval // 20  # 随机范围为间隔的5%
+    for range_str in needle_range.split(','):
+        range_str = range_str.strip()
         
-        positions = []
-        for i in range(num_insertions):
-            base_pos = insert_start_pos + i * interval
-            
-            # 添加小范围随机偏移，头尾特殊处理
-            if i == 0:
-                # 第一个针：只能向右偏移
-                random_offset = random.randint(0, random_range) if random_range > 0 else 0
-            elif i == num_insertions - 1:
-                # 最后一个针：只能向左偏移
-                random_offset = random.randint(-random_range, 0) if random_range > 0 else 0
-            else:
-                # 中间的针：可以双向偏移
-                random_offset = random.randint(-random_range, random_range) if random_range > 0 else 0
-            
-            actual_pos = max(insert_start_pos, min(insert_end_pos, base_pos + random_offset))
-            positions.append(actual_pos)
+        # 检查是否指定了数量（格式：start-end:count）
+        if ':' in range_str:
+            has_count_specified = True
+            range_part, count_part = range_str.split(':')
+            specified_count = int(count_part)
+        else:
+            range_part = range_str
+            specified_count = None
+        
+        range_parts = range_part.split('-')
+        range_start = float(range_parts[0])
+        range_end = float(range_parts[1])
+        
+        # 计算该区间的实际位置和长度
+        insert_start_pos = int(len(base_string) * range_start)
+        insert_end_pos = int(len(base_string) * range_end)
+        insert_length = insert_end_pos - insert_start_pos
+        
+        ranges.append({
+            'start': insert_start_pos,
+            'end': insert_end_pos,
+            'length': insert_length,
+            'ratio': range_start,
+            'ratio_end': range_end,
+            'count': specified_count  # None表示使用权重分配
+        })
     
+    # 检查是否所有区间都指定了数量
+    if has_count_specified:
+        # 如果有区间指定了数量，检查是否所有区间都指定了
+        if not all(r['count'] is not None for r in ranges):
+            raise ValueError("如果使用指定数量模式，所有区间都必须指定数量（格式：start-end:count）")
+        # 使用指定的总数量
+        actual_num_insertions = sum(r['count'] for r in ranges)
+    else:
+        # 使用传入的 num_insertions 参数
+        actual_num_insertions = num_insertions
+        # 计算总长度用于权重分配
+        total_length = sum(r['length'] for r in ranges)
+    
+    # 按权重或指定数量为每个区间分配针数
+    positions = []
+    allocated_needles = 0
+    
+    for idx, range_info in enumerate(ranges):
+        # 确定当前区间的针数
+        if range_info['count'] is not None:
+            # 使用指定的数量
+            needles_for_range = range_info['count']
+        else:
+            # 按权重分配
+            if idx == len(ranges) - 1:
+                # 最后一个区间：分配剩余的所有针
+                needles_for_range = actual_num_insertions - allocated_needles
+            else:
+                # 其他区间：按权重比例分配
+                needles_for_range = round(actual_num_insertions * range_info['length'] / total_length)
+                needles_for_range = max(1, needles_for_range)  # 至少分配1个针
+        
+        allocated_needles += needles_for_range
+        
+        # 在当前区间内生成插针位置
+        insert_start_pos = range_info['start']
+        insert_end_pos = range_info['end']
+        insert_length = range_info['length']
+        
+        if needles_for_range == 0:
+            # 如果该区间分配了0个针，跳过
+            continue
+        elif needles_for_range == 1:
+            # 只有一个针，放在区间中间
+            positions.append(insert_start_pos + insert_length // 2)
+        else:
+            # 多个针：均匀分布 + 小范围随机
+            interval = insert_length // (needles_for_range - 1)
+            random_range = interval // 20  # 随机范围为间隔的5%
+            
+            for i in range(needles_for_range):
+                base_pos = insert_start_pos + i * interval
+                
+                # 添加小范围随机偏移
+                if i == 0:
+                    # 第一个针：只能向右偏移
+                    random_offset = random.randint(0, random_range) if random_range > 0 else 0
+                elif i == needles_for_range - 1:
+                    # 最后一个针：只能向左偏移
+                    random_offset = random.randint(-random_range, 0) if random_range > 0 else 0
+                else:
+                    # 中间的针：可以双向偏移
+                    random_offset = random.randint(-random_range, random_range) if random_range > 0 else 0
+                
+                actual_pos = max(insert_start_pos, min(insert_end_pos, base_pos + random_offset))
+                positions.append(actual_pos)
+    
+    # 按位置排序（从大到小，便于插入）
     positions.sort(reverse=True)
 
     # 生成随机4位数并插入
@@ -268,7 +336,7 @@ def generate_test_case(target_length, num_insertions, base_pattern=DEFAULT_BASE_
     for idx, pos in enumerate(positions):
         random_num = random.randint(1000, 9999)
         result_string.insert(pos, str(random_num))
-        numbers_list.append((num_insertions - idx, random_num))
+        numbers_list.append((actual_num_insertions - idx, random_num))
 
     final_string = ''.join(result_string)
     numbers_list.sort(key=lambda x: x[0])
@@ -286,7 +354,7 @@ def generate_test_case(target_length, num_insertions, base_pattern=DEFAULT_BASE_
     prompt_content = prompt_text + final_string
     standard_json_str = json.dumps(inserted_numbers, ensure_ascii=False)
     byte_count = get_byte_count(prompt_content)
-    return prompt_content, standard_json_str, byte_count
+    return prompt_content, standard_json_str, byte_count, actual_num_insertions
 
 async def make_api_request(session, request_id, semaphore, db_manager,
                           target_length, num_insertions, base_pattern, needle_range, stats):
@@ -296,7 +364,7 @@ async def make_api_request(session, request_id, semaphore, db_manager,
     async with semaphore:
         print(f"→ 请求 #{request_id}: 开始发送...")
 
-        prompt_content, standard_answers_json, byte_count = generate_test_case(
+        prompt_content, standard_answers_json, byte_count, actual_num_insertions = generate_test_case(
             target_length, num_insertions, base_pattern, needle_range
         )
 
@@ -417,7 +485,9 @@ async def main():
             print("  python run_batch_test.py 20 5                    # 20次，5并发，0延迟")
             print("  python run_batch_test.py 20 5 1                  # 20次，5并发，1秒延迟")
             print("  python run_batch_test.py 20 5 1 30000 50         # 20次，5并发，1秒延迟，30000字节，50个插入")
-            print("  python run_batch_test.py 20 5 1 30000 50 a| 0.5-1  # 后半部分插针")
+            print("  python run_batch_test.py 20 5 1 30000 50 a| 0.5-1             # 后半部分插针")
+            print("  python run_batch_test.py 20 5 1 30000 50 a| 0-0.25,0.75-1     # 前后两段插针（多区间）")
+            print("  python run_batch_test.py 20 5 1 30000 50 a| 0-0.1:1,0.9-1:20  # 指定数量：前1个，后20个")
             sys.exit(1)
 
     if len(sys.argv) > 2:
@@ -468,16 +538,48 @@ async def main():
     needle_range = DEFAULT_NEEDLE_RANGE
     if len(sys.argv) > 7:
         needle_range = sys.argv[7]
-        # 验证格式
+        # 验证格式（支持单区间、多区间、指定数量）
         try:
-            range_parts = needle_range.split('-')
-            range_start = float(range_parts[0])
-            range_end = float(range_parts[1])
-            if not (0 <= range_start <= range_end <= 1):
-                raise ValueError
-        except (ValueError, IndexError):
-            print(f"错误: 插针范围格式错误，应为 'start-end' 格式，如 '0-1' 或 '0.5-1'")
+            for range_str in needle_range.split(','):
+                range_str = range_str.strip()
+                
+                # 检查是否有指定数量（格式：start-end:count）
+                if ':' in range_str:
+                    range_part, count_part = range_str.split(':')
+                    try:
+                        count = int(count_part)
+                        if count < 0:
+                            raise ValueError("数量不能为负数")
+                    except ValueError:
+                        raise ValueError(f"数量格式错误: {count_part}")
+                else:
+                    range_part = range_str
+                
+                range_parts = range_part.split('-')
+                if len(range_parts) != 2:
+                    raise ValueError("区间格式错误")
+                range_start = float(range_parts[0])
+                range_end = float(range_parts[1])
+                if not (0 <= range_start <= range_end <= 1):
+                    raise ValueError("区间值超出范围")
+        except (ValueError, IndexError) as e:
+            print(f"错误: 插针范围格式错误")
+            print(f"支持格式:")
+            print(f"  单区间: 'start-end' (如 '0-1' 或 '0.5-1')")
+            print(f"  多区间: 'start1-end1,start2-end2,...' (如 '0-0.25,0.75-1')")
+            print(f"  指定数量: 'start-end:count' (如 '0-0.1:1,0.9-1:20')")
+            print(f"详细错误: {e}")
             sys.exit(1)
+
+    db_manager = DatabaseManager(MODEL_ID, SCRIPT_DIR)
+    db_manager.connect()
+    # 确保统计表存在（用于记录"已回答/解析失败"计数）
+    db_manager.create_stats_table()
+
+    # 先生成一个测试用例以获取实际的插入数量
+    sample_prompt, sample_standard_json, sample_byte_count, actual_num_insertions = generate_test_case(
+        target_length, num_insertions, base_pattern, needle_range
+    )
 
     print("=" * 70)
     print("批量API数据收集脚本（SQLite版本 - 动态并发）")
@@ -489,19 +591,14 @@ async def main():
     print(f"请求延迟: {request_delay}秒")
     print(f"总请求数: {total_requests}")
     print(f"上下文长度: {target_length}")
-    print(f"插入数量: {num_insertions}")
+    # 检查是否使用了指定数量模式
+    if ':' in needle_range:
+        print(f"插入数量: {actual_num_insertions} (由区间指定)")
+    else:
+        print(f"插入数量: {num_insertions}")
     print(f"基础模式: {base_pattern}")
     print(f"插针返回范围: {needle_range}")
     print("=" * 70)
-
-    db_manager = DatabaseManager(MODEL_ID, SCRIPT_DIR)
-    db_manager.connect()
-    # 确保统计表存在（用于记录“已回答/解析失败”计数）
-    db_manager.create_stats_table()
-
-    sample_prompt, sample_standard_json, sample_byte_count = generate_test_case(
-        target_length, num_insertions, base_pattern, needle_range
-    )
     table_name = db_manager.create_table_if_not_exists(sample_byte_count)
 
     stats_before = db_manager.get_table_stats(sample_byte_count)

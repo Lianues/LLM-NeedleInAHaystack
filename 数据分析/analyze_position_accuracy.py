@@ -6,16 +6,16 @@ import sys
 # 获取脚本所在目录
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def longest_common_subsequence(seq1, seq2):
+def longest_common_subsequence_with_indices(seq1, seq2):
     """
-    计算两个序列的最长公共子序列（LCS）
+    计算两个序列的最长公共子序列（LCS），并返回 seq1 中匹配元素的索引
     
     参数:
-        seq1: 序列1（标准答案的键列表）
-        seq2: 序列2（模型回答的键列表）
+        seq1: 标准序列
+        seq2: 模型序列
     
     返回:
-        LCS列表（按顺序正确的键）
+        seq1 中属于 LCS 的元素索引列表
     """
     m, n = len(seq1), len(seq2)
     
@@ -30,12 +30,12 @@ def longest_common_subsequence(seq1, seq2):
             else:
                 dp[i][j] = max(dp[i-1][j], dp[i][j-1])
     
-    # 回溯找出LCS
-    lcs = []
+    # 回溯找出 LCS，记录 seq1 中的索引
+    indices = []
     i, j = m, n
     while i > 0 and j > 0:
         if seq1[i-1] == seq2[j-1]:
-            lcs.append(seq1[i-1])
+            indices.append(i-1)  # 记录 seq1 的索引
             i -= 1
             j -= 1
         elif dp[i-1][j] > dp[i][j-1]:
@@ -44,12 +44,18 @@ def longest_common_subsequence(seq1, seq2):
             j -= 1
     
     # 反转结果（因为是从后往前回溯的）
-    lcs.reverse()
-    return lcs
+    indices.reverse()
+    return indices
 
 def analyze_position_accuracy(db_path, table_name, byte_count):
     """
     分析单个字节表的位置准确率
+    使用 LCS 算法找出标准序列中按顺序正确出现的值
+    
+    例如：
+    - 标准答案：{0: "A", 1: "B", 2: "C"} → ["A", "B", "C"]
+    - 模型回答：{0: "A", 1: "X", 2: "B", 3: "C"} → ["A", "X", "B", "C"]
+    - LCS 结果：["A", "B", "C"] 都正确（即使中间插入了 X）
     
     参数:
         db_path: 数据库文件路径
@@ -57,7 +63,7 @@ def analyze_position_accuracy(db_path, table_name, byte_count):
         byte_count: 字节数
     
     返回:
-        位置准确率统计字典 {key_position: frequency}
+        位置准确率统计字典 {sequence_position: frequency}
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -74,7 +80,7 @@ def analyze_position_accuracy(db_path, table_name, byte_count):
     if not records:
         return {}, 0
     
-    # 统计每个键位的正答频数
+    # 统计每个序列位置的正答频数
     position_frequency = {}
     total_records = 0
     
@@ -84,26 +90,34 @@ def analyze_position_accuracy(db_path, table_name, byte_count):
             standard_answers = json.loads(standard_json)
             model_answers = json.loads(model_response_json)
             
-            # 获取标准答案的键序列（按数字顺序）
-            standard_keys = sorted([int(k) for k in standard_answers.keys()])
+            # 将字典转换为值序列（按键排序）
+            try:
+                standard_keys = sorted([int(k) for k in standard_answers.keys()])
+                standard_sequence = [standard_answers[str(k)] for k in standard_keys]
+                
+                model_keys = sorted([int(k) for k in model_answers.keys()])
+                model_sequence = [model_answers[str(k)] for k in model_keys]
+            except (ValueError, TypeError):
+                # 如果键不是数字，使用字符串排序
+                standard_keys = sorted(standard_answers.keys())
+                standard_sequence = [standard_answers[k] for k in standard_keys]
+                
+                model_keys = sorted(model_answers.keys())
+                model_sequence = [model_answers[k] for k in model_keys]
             
-            # 获取模型回答的键序列（按数字顺序）
-            # 只保留在标准答案中存在且值正确的键
-            model_keys = []
-            for k in sorted([int(k) for k in model_answers.keys()]):
-                k_str = str(k)
-                # 检查键是否在标准答案中，且值是否正确
-                if k_str in standard_answers and model_answers[k_str] == standard_answers[k_str]:
-                    model_keys.append(k)
+            # 使用 LCS 算法找出标准序列中按顺序正确出现的值
+            # 返回的是标准序列中属于 LCS 的元素索引
+            lcs_indices = longest_common_subsequence_with_indices(standard_sequence, model_sequence)
             
-            # 计算LCS（按顺序正确的键）
-            lcs = longest_common_subsequence(standard_keys, model_keys)
-            
-            # 统计LCS中的每个键位
-            for key in lcs:
-                if key not in position_frequency:
-                    position_frequency[key] = 0
-                position_frequency[key] += 1
+            # 统计 LCS 中的每个位置
+            for idx in lcs_indices:
+                position = standard_keys[idx]
+                # 确保键类型一致：如果是字符串形式的数字，转换为整数
+                if isinstance(position, str) and position.isdigit():
+                    position = int(position)
+                if position not in position_frequency:
+                    position_frequency[position] = 0
+                position_frequency[position] += 1
             
             total_records += 1
             
@@ -200,7 +214,7 @@ def analyze_model_position_accuracy(model_db_path):
         model_db_path: 模型数据库路径
     """
     print("=" * 70)
-    print("位置准确率分析工具（基于LCS算法）")
+    print("位置准确率分析工具（基于 LCS 算法，与 grading_utils.py 编辑距离一致）")
     print("=" * 70)
     
     # 检查模型数据库是否存在
@@ -274,7 +288,12 @@ def analyze_model_position_accuracy(model_db_path):
         insert_position_stats(out_cursor, position_table_name, position_frequency, total_records)
         
         # 显示前10个键位的统计
-        sorted_positions = sorted(position_frequency.items(), key=lambda x: x[0])
+        # 确保排序键统一为整数类型（如果可能），否则按字符串排序
+        try:
+            sorted_positions = sorted(position_frequency.items(), key=lambda x: (int(x[0]) if isinstance(x[0], str) else x[0]))
+        except (ValueError, TypeError):
+            # 如果无法转换为整数，则按字符串排序
+            sorted_positions = sorted(position_frequency.items(), key=lambda x: str(x[0]))
         print(f"  位置准确率（前10个键位）:")
         print(f"    {'键位':<8} {'频数':<8} {'概率':<10}")
         print(f"    {'-'*26}")
