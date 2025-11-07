@@ -17,6 +17,7 @@ def get_position_accuracy_data(db_path):
     
     返回:
         byte_counts: 字节数列表（排序后）
+        positions: 位置列表（排序后）
         heatmap_data: 热力图数据矩阵 [字节数 x 位置]
     """
     conn = sqlite3.connect(db_path)
@@ -34,10 +35,11 @@ def get_position_accuracy_data(db_path):
     if not tables:
         print("错误: 数据库中没有找到位置准确率表")
         conn.close()
-        return None, None
+        return None, None, None
     
     # 提取字节数和数据
     byte_data = {}  # {byte_count: {position: probability}}
+    positions_set = set()
     
     for table_name in tables:
         # 从表名提取字节数 (bytes_12345_position_accuracy -> 12345)
@@ -67,6 +69,7 @@ def get_position_accuracy_data(db_path):
         position_dict = {}
         for key_pos, prob in rows:
             position_dict[key_pos] = prob
+            positions_set.add(key_pos)
         
         byte_data[byte_count] = position_dict
     
@@ -74,14 +77,16 @@ def get_position_accuracy_data(db_path):
     
     if not byte_data:
         print("错误: 没有找到有效的数据")
-        return None, None
+        return None, None, None
     
     # 排序字节数
     byte_counts = sorted(byte_data.keys())
+    positions = sorted(positions_set)
     
-    # 创建热力图数据矩阵 (字节数 x 位置)
-    # 位置范围是1-40
-    positions = list(range(1, 41))
+    if not positions:
+        print("错误: 没有找到任何位置数据")
+        return None, None, None
+    
     heatmap_data = np.zeros((len(byte_counts), len(positions)))
     
     for i, byte_count in enumerate(byte_counts):
@@ -90,7 +95,7 @@ def get_position_accuracy_data(db_path):
             if position in byte_data[byte_count]:
                 heatmap_data[i, j] = byte_data[byte_count][position]
     
-    return byte_counts, heatmap_data
+    return byte_counts, positions, heatmap_data
 
 def create_heatmap(db_path, output_path=None):
     """
@@ -101,19 +106,19 @@ def create_heatmap(db_path, output_path=None):
         output_path: 输出图片路径（如果为None，则显示图片）
     """
     print("正在读取数据...")
-    byte_counts, heatmap_data = get_position_accuracy_data(db_path)
+    byte_counts, positions, heatmap_data = get_position_accuracy_data(db_path)
     
-    if byte_counts is None or heatmap_data is None:
+    if byte_counts is None or positions is None or heatmap_data is None:
         return
     
     print(f"找到 {len(byte_counts)} 个字节表")
     print(f"字节数范围: {min(byte_counts)} - {max(byte_counts)}")
+    print(f"位置范围: {positions[0]} - {positions[-1]} (共 {len(positions)} 列)")
     
     # 创建图表
     plt.figure(figsize=(16, 10))
     
     # 绘制热力图
-    positions = list(range(1, 41))
     
     # 将字节数转换为k单位并四舍五入
     byte_labels = [f"{round(bc / 1000)}K" for bc in byte_counts]
@@ -132,7 +137,7 @@ def create_heatmap(db_path, output_path=None):
     )
     
     # 设置标题和标签
-    plt.title('位置准确率热力图\n(横轴: 词的位置 1-40, 纵轴: 字符数)', fontsize=16, pad=20)
+    plt.title(f'位置准确率热力图\n(横轴: 词的位置 {positions[0]}-{positions[-1]}, 纵轴: 字符数)', fontsize=16, pad=20)
     plt.xlabel('词的位置 (Key Position)', fontsize=12)
     plt.ylabel('字符数 (Byte Count)', fontsize=12)
     
