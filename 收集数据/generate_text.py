@@ -9,6 +9,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 配置参数
 BASE_PATTERN = "a|"
 DIGIT_LENGTH = 4       # 4位数
+DEFAULT_RANDOM_OFFSET_RATIO = None  # 插针位置随机偏移比例（None=不偏移，0.05=偏移间隔的5%）
 
 # 默认插针范围配置
 # 支持两种模式：
@@ -21,12 +22,13 @@ DIGIT_LENGTH = 4       # 4位数
 #    - "200000-240000"          # 只在200000-240000字节范围插针
 #    - "0-20000,100000-200000,210000-240000"  # 三个区间插针（按长度权重分配）
 #    - "0-20000:10,100000-200000:20,210000-240000:20"  # 指定各区间针数（总共50根）
-DEFAULT_NEEDLE_RANGE = "200000-240000"
+DEFAULT_NEEDLE_RANGE = "0-1"
 
 # 从命令行参数获取配置
 # 参数1: 上下文长度（默认50000）
 # 参数2: 插入数量（默认40）
 # 参数3: 插针返回范围（默认0-1）
+# 参数4: 随机偏移比例（默认None，可选0-1之间的数字）
 
 if len(sys.argv) > 1:
     try:
@@ -36,19 +38,20 @@ if len(sys.argv) > 1:
             sys.exit(1)
     except ValueError:
         print("错误: 上下文数必须是整数")
-        print("使用方法: python generate_text.py [上下文数] [插入数量] [插针范围]")
+        print("使用方法: python generate_text.py [上下文数] [插入数量] [插针范围] [随机偏移比例]")
         print("\n示例 - 相对比例模式（0-1之间的小数）:")
         print("  python generate_text.py 240000 40                  # 240000字符，插入40个数，全文")
         print("  python generate_text.py 240000 40 0.5-1            # 后半部分插针")
         print("  python generate_text.py 240000 40 0-0.25,0.75-1    # 前后两段插针")
         print("  python generate_text.py 240000 40 0-0.1:1,0.9-1:39 # 前1个，后39个")
+        print("  python generate_text.py 240000 40 0-1 0.05         # 全文插针，5%随机偏移")
         print("\n示例 - 绝对位置模式（字节数）:")
         print("  python generate_text.py 240000 40 200000-240000    # 只在200000-240000字节范围插针")
         print("  python generate_text.py 240000 40 0-20000,100000-200000,210000-240000  # 三个区间")
         print("  python generate_text.py 240000 50 0-20000:10,100000-200000:20,210000-240000:20  # 指定各区间针数")
         sys.exit(1)
 else:
-    TARGET_LENGTH = 200000  # 默认长度20k字符
+    TARGET_LENGTH = 100000  # 默认长度20k字符
 
 if len(sys.argv) > 2:
     try:
@@ -61,6 +64,22 @@ if len(sys.argv) > 2:
         sys.exit(1)
 else:
     NUM_INSERTIONS = 40  # 默认插入40个数字
+
+# 随机偏移比例参数
+if len(sys.argv) > 4:
+    try:
+        if sys.argv[4].lower() == 'none':
+            RANDOM_OFFSET_RATIO = None
+        else:
+            RANDOM_OFFSET_RATIO = float(sys.argv[4])
+            if RANDOM_OFFSET_RATIO < 0 or RANDOM_OFFSET_RATIO > 1:
+                print("错误: 随机偏移比例必须在0-1之间或为'none'")
+                sys.exit(1)
+    except ValueError:
+        print("错误: 随机偏移比例必须是数字或'none'")
+        sys.exit(1)
+else:
+    RANDOM_OFFSET_RATIO = DEFAULT_RANDOM_OFFSET_RATIO
 
 if len(sys.argv) > 3:
     NEEDLE_RANGE = sys.argv[3]
@@ -227,21 +246,27 @@ for idx, range_info in enumerate(ranges):
         # 只有一个针，放在区间中间
         positions.append(insert_start_pos + insert_length // 2)
     else:
-        # 多个针：均匀分布 + 小范围随机
+        # 多个针：均匀分布 + 可选的小范围随机偏移
         interval = insert_length // (needles_for_range - 1)
-        random_range = interval // 20  # 随机范围为间隔的5%
+        
+        # 计算随机偏移范围
+        if RANDOM_OFFSET_RATIO is not None and RANDOM_OFFSET_RATIO > 0:
+            random_range = int(interval * RANDOM_OFFSET_RATIO)
+        else:
+            random_range = 0
         
         for i in range(needles_for_range):
-            base_pos = insert_start_pos + i * interval
-            
-            # 添加小范围随机偏移
+            # 第一个针在起点，最后一个针在终点，中间均匀分布
             if i == 0:
+                base_pos = insert_start_pos
                 # 第一个针：只能向右偏移
                 random_offset = random.randint(0, random_range) if random_range > 0 else 0
             elif i == needles_for_range - 1:
+                base_pos = insert_end_pos
                 # 最后一个针：只能向左偏移
                 random_offset = random.randint(-random_range, 0) if random_range > 0 else 0
             else:
+                base_pos = insert_start_pos + i * interval
                 # 中间的针：可以双向偏移
                 random_offset = random.randint(-random_range, random_range) if random_range > 0 else 0
             
@@ -300,6 +325,10 @@ print(f"基础字符串长度: {len(base_string)} 字符")
 print(f"最终字符串长度: {len(final_string)} 字符")
 print(f"字节数: {len(final_string.encode('utf-8'))} bytes")
 print(f"插针范围: {NEEDLE_RANGE}")
+if RANDOM_OFFSET_RATIO is not None:
+    print(f"随机偏移: {RANDOM_OFFSET_RATIO*100:.1f}%")
+else:
+    print(f"随机偏移: 无")
 # 输出每个区间的详细信息
 for idx, r in enumerate(ranges, 1):
     needles_in_range = sum(1 for pos in positions if r['start'] <= pos <= r['end'])
