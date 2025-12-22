@@ -51,7 +51,7 @@ if len(sys.argv) > 1:
         print("  python generate_text.py 240000 50 0-20000:10,100000-200000:20,210000-240000:20  # 指定各区间针数")
         sys.exit(1)
 else:
-    TARGET_LENGTH = 100000  # 默认长度20k字符
+    TARGET_LENGTH = 200000  # 默认长度20k字符
 
 if len(sys.argv) > 2:
     try:

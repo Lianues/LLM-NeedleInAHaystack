@@ -11,12 +11,12 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 配置参数
-API_URL = "https://127.0.0.1/v1/chat/completions"
-MODEL_ID = "gemini-3-pro-preview"      # 模型ID（用于数据库文件名）
-API_MODEL = "gemini-3-pro-preview"     # 发送给API的模型名称
+API_URL = "http://127.0.0.1/v1/chat/completions"
+MODEL_ID = "gemini-2.5-pro"      # 模型ID（用于数据库文件名）
+API_MODEL = "gemini-2.5-pro"     # 发送给API的模型名称
 
 # 默认生成参数
-DEFAULT_TARGET_LENGTH = 40200  # 目标文本长度（字节）- 仅在不使用文本文件时有效
+DEFAULT_TARGET_LENGTH = 40000  # 目标文本长度（字节）- 仅在不使用文本文件时有效
 DEFAULT_NUM_INSERTIONS = 40     # 默认插入针数（当使用:count指定数量时会被覆盖）
 DEFAULT_BASE_PATTERN = "a|"     # 基础填充模式 - 仅在不使用文本文件时有效
 DEFAULT_REQUEST_DELAY = 0       # 默认请求延迟（秒）
@@ -25,9 +25,9 @@ DEFAULT_RANDOM_OFFSET_RATIO = None  # 插针位置随机偏移比例（None=不�
 # 文本文件配置（优先级高于生成模式）
 # 如果设置了文本文件路径，将使用文件内容而不是生成文本
 # 设置为None则使用DEFAULT_BASE_PATTERN生成文本
-DEFAULT_TEXT_FILE = os.path.join(SCRIPT_DIR, "小说/500000.txt")  
+# DEFAULT_TEXT_FILE = os.path.join(SCRIPT_DIR, "小说/500000.txt")  
 # 默认文本文件路径（相对于脚本目录）
-# DEFAULT_TEXT_FILE = None  # 设置为None则使用base_pattern生成文本
+DEFAULT_TEXT_FILE = None  # 设置为None则使用base_pattern生成文本
 
 # 默认插针范围配置
 # 支持两种模式：
@@ -49,7 +49,7 @@ DEFAULT_MAX_CONCURRENT = 10  # 默认最大并发数
 HEADERS = {
     'accept': 'application/json',
     'accept-language': 'zh-CN',
-    'authorization': 'Bearer sk-123',
+    'authorization': 'Bearer sk-Hjt1',
     'content-type': 'application/json',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) CherryStudio/1.5.11 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36',
 }
