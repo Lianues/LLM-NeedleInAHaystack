@@ -11,12 +11,12 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 配置参数
-API_URL = "http://127.0.0.1/v1/chat/completions"
-MODEL_ID = "gemini-2.5-pro"      # 模型ID（用于数据库文件名）
-API_MODEL = "gemini-2.5-pro"     # 发送给API的模型名称
+API_URL = "https://api.moonshot.ai/v1/chat/completions"
+MODEL_ID = "moonshotai/kimi-k2.5"      # 模型ID（用于数据库文件名）
+API_MODEL = "kimi-k2.5"     # 发送给API的模型名称
 
 # 默认生成参数
-DEFAULT_TARGET_LENGTH = 40000  # 目标文本长度（字节）- 仅在不使用文本文件时有效
+DEFAULT_TARGET_LENGTH = 230000  # 目标文本长度（字节）- 仅在不使用文本文件时有效
 DEFAULT_NUM_INSERTIONS = 40     # 默认插入针数（当使用:count指定数量时会被覆盖）
 DEFAULT_BASE_PATTERN = "a|"     # 基础填充模式 - 仅在不使用文本文件时有效
 DEFAULT_REQUEST_DELAY = 0       # 默认请求延迟（秒）
@@ -49,7 +49,7 @@ DEFAULT_MAX_CONCURRENT = 10  # 默认最大并发数
 HEADERS = {
     'accept': 'application/json',
     'accept-language': 'zh-CN',
-    'authorization': 'Bearer sk-Hjt1',
+    'authorization': 'Bearer sk',
     'content-type': 'application/json',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) CherryStudio/1.5.11 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36',
 }
